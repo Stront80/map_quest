@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Квест в Сокольниках</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { margin: 0; font-family: sans-serif; }
+        #map { height: 100vh; width: 100%; }
+        #ui { 
+            position: absolute; top: 10px; left: 10px; z-index: 1000; 
+            background: white; padding: 15px; border-radius: 10px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2); 
+        }
+        .collected { text-decoration: line-through; color: gray; }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <b>Собрано точек: <span id="score">0</span> / <span id="total">0</span></b>
+        <div id="list"></div>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // 1. Координаты границ парка Сокольники (примерные)
+        const parkBounds = [
+            [55.745, 37.670], // Юго-Запад
+            [55.775, 37.730]  // Северо-Восток
+        ];
+
+        // 2. Список точек квеста
+        const questPoints = [
+            { id: 1, name: "Главный вход", lat: 55.762, lon: 37.692, collected: false },
+            { id: 2, name: "Озеро", lat: 55.758, lon: 37.705, collected: false },
+            { id: 3, name: "Скульптура", lat: 55.765, lon: 37.710, collected: false },
+            { id: 4, name: "Старый мост", lat: 55.760, lon: 37.685, collected: false },
+        ];
+
+        // Инициализация карты
+        const map = L.map('map', {
+            maxBounds: parkBounds,       // Ограничиваем область карты
+            maxBoundsViscosity: 1.0     // Карта "отпружинивает" назад, если выйти за границу
+        }).setView([55.762, 37.692], 14);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        // Рисуем точки квеста на карте
+        const markers = {};
+        questPoints.forEach(point => {
+            markers[point.id] = L.marker([point.lat, point.lon])
+                .addTo(map)
+                .bindPopup(`Точка: ${point.name}`);
+        });
+
+        // Обновление списка в интерфейсе
+        function updateUI() {
+            const listDiv = document.getElementById('list');
+            const scoreSpan = document.getElementById('score');
+            const totalSpan = document.getElementById('total');
+            
+            listDiv.innerHTML = '';
+            let collectedCount = 0;
+
+            questPoints.forEach(p => {
+                const item = document.createElement('div');
+                item.innerText = p.name;
+                if (p.collected) {
+                    item.className = 'collected';
+                    collectedCount++;
+                }
+                listDiv.appendChild(item);
+            });
+
+            scoreSpan.innerText = collectedCount;
+            totalSpan.innerText = questPoints.length;
+
+            if (collectedCount === questPoints.length) {
+                alert("Поздравляем! Вы прошли весь квест!");
+            }
+        }
+
+        // Функция проверки близости к точке
+        function checkProximity(userLat, userLon) {
+            const userPos = L.latLng(userLat, userLon);
+
+            questPoints.forEach(point => {
+                if (!point.collected) {
+                    const pointPos = L.latLng(point.lat, point.lon);
+                    const distance = userPos.distanceTo(pointPos); // Расстояние в метрах
+
+                    if (distance < 20) { // Если пользователь ближе 20 метров
+                        point.collected = true;
+                        markers[point.id].setOpacity(0.5); // Делаем маркер бледным
+                        markers[point.id].bindPopup("Собрано!").openPopup();
+                        updateUI();
+                    }
+                }
+            });
+        }
+
+        // Следим за перемещением пользователя
+        if (navigator.geolocation) {
+            navigator.geolocation.watchPosition(
+                (position) => {
+                    const { latitude, longitude } = position.coords;
+                    
+                    // Рисуем синий круг в месте нахождения пользователя
+                    L.circleMarker([latitude, longitude], { color: 'blue', radius: 8 }).addTo(map);
+                    
+                    // Проверяем, не подошел ли пользователь к какой-то точке
+                    checkProximity(latitude, longitude);
+                    
+                    // Центрируем карту на пользователе (опционально)
+                    map.setView([latitude, longitude]);
+                },
+                (err) => console.error(err),
+                { enableHighAccuracy: true } // Максимальная точность GPS
+            );
+        }
+
+        updateUI();
+    </script>
+</body>
+</html>
